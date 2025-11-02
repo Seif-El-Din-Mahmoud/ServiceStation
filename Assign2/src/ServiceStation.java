@@ -4,7 +4,7 @@ class Semaphore {
     protected int value = 0 ;
     protected Semaphore() { value = 0 ; }
     protected Semaphore(int initial) { value = initial ; }
-    public synchronized void P() {
+    public synchronized void Wait() {
         value-- ;
         if (value < 0)
             try { wait();}
@@ -20,7 +20,7 @@ class Pump extends Thread {
     Semaphore Empty,Full,Pump,Mutex;
     Queue<Car> queue;
     int ID;
-    public Pump(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Queue<Car> queue) {
+    public Pump(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Semaphore Mutex, Queue<Car> queue) {
         this.Empty = Empty ;
         this.Full = Full ;
         this.Pump = Pump ;
@@ -35,7 +35,7 @@ class Car extends Thread {
     Semaphore Empty,Full,Pump,Mutex;
     Queue<Car> queue;
     int ID;
-    public Car(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Queue<Car> queue) {
+    public Car(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Semaphore Mutex, Queue<Car> queue) {
         this.Empty = Empty ;
         this.Full = Full ;
         this.Pump = Pump ;
