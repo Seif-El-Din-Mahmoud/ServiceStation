@@ -11,7 +11,7 @@ class Semaphore {
         catch( InterruptedException e )
         {System.out.println("Error: " + e);}
     }
-    public synchronized void V() {
+    public synchronized void signal() {
         value++ ; if (value <= 0) notify() ;
     }
 }
