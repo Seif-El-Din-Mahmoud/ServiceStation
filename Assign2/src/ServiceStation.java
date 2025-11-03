@@ -134,15 +134,15 @@ public class ServiceStation {
         List<Pump> pumps = new ArrayList<>();
         List<Car> cars = new ArrayList<>();
 
-        // Create and start pumps first
+        // create and start pumps
         for (int i = 1; i <= pumpNumber; i++) {
             Pump p = new Pump(i, empty, full, pump, mutex, queue);
             pumps.add(p);
             p.start();
         }
 
-        // create cars with delays between arrivals
-        for (int i = 1; i <= queueSize; i++) { // Create more cars than queue size to test waiting
+        // create cars
+        for (int i = 1; i <= queueSize; i++) {
             Car c = new Car(i, empty, full, pump, mutex, queue);
             cars.add(c);
             c.start();
