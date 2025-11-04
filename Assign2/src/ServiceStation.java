@@ -1,109 +1,185 @@
-import java.net.SocketOption;
+import javax.swing.*;
+import java.awt.*;
 import java.util.*;
+import java.util.List;
 
 class Semaphore {
-    protected int value = 0 ;
-    protected Semaphore() { value = 0 ; }
-    protected Semaphore(int initial) { value = initial ; }
+    protected int value = 0;
+    protected Semaphore() { value = 0; }
+    protected Semaphore(int initial) { value = initial; }
+
     public synchronized void Wait() {
-        value-- ;
+        value--;
         if (value < 0)
-            try { wait();}
-        catch( InterruptedException e )
-        {System.out.println("Error: " + e);}
+            try { wait(); } catch (InterruptedException e) { System.out.println("Error: " + e); }
     }
+
     public synchronized void signal() {
-        value++ ; if (value <= 0) notify() ;
+        value++;
+        if (value <= 0) notify();
     }
-    public synchronized int getValue() { return value ; }
+
+    public synchronized int getValue() { return value; }
+}
+
+class GUI {
+    private static JTextArea logArea;
+    private static JLabel[] pumpLabels;
+    private static JPanel queuePanel;
+
+    public static void setup(int pumps) {
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Service Station Simulation");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(700, 500);
+            frame.setLayout(new BorderLayout(8,8));
+
+            // Top: pumps
+            JPanel pumpsPanel = new JPanel(new GridLayout(1, pumps, 8, 8));
+            pumpLabels = new JLabel[pumps];
+            for (int i = 0; i < pumps; i++) {
+                pumpLabels[i] = new JLabel("Pump " + (i + 1) + " - Free", SwingConstants.CENTER);
+                pumpLabels[i].setOpaque(true);
+                pumpLabels[i].setBackground(Color.GREEN);
+                pumpLabels[i].setFont(new Font("Arial", Font.BOLD, 13));
+                pumpsPanel.add(pumpLabels[i]);
+            }
+
+            // Middle: queue
+            queuePanel = new JPanel();
+            queuePanel.setBorder(BorderFactory.createTitledBorder("Waiting Queue"));
+            queuePanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5));
+            queuePanel.setPreferredSize(new Dimension(0, 120));
+
+            // Bottom: log
+            logArea = new JTextArea();
+            logArea.setEditable(false);
+            JScrollPane scroll = new JScrollPane(logArea);
+            scroll.setBorder(BorderFactory.createTitledBorder("Event Log"));
+
+            frame.add(pumpsPanel, BorderLayout.NORTH);
+            frame.add(queuePanel, BorderLayout.CENTER);
+            frame.add(scroll, BorderLayout.SOUTH);
+
+            frame.setVisible(true);
+        });
+    }
+
+    public static void log(String msg) {
+        System.out.println(msg); // print to terminal
+        SwingUtilities.invokeLater(() -> {
+            if (logArea != null) {
+                logArea.append(msg + "\n");
+                logArea.setCaretPosition(logArea.getDocument().getLength());
+            }
+        });
+    }
+
+    public static void updatePump(int id, String status, boolean busy) {
+        SwingUtilities.invokeLater(() -> {
+            if (pumpLabels != null && id - 1 < pumpLabels.length) {
+                pumpLabels[id - 1].setText("Pump " + id + " - " + status);
+                pumpLabels[id - 1].setBackground(busy ? Color.RED : Color.GREEN);
+            }
+        });
+    }
+
+    public static void updateQueue(Queue<Car> q) {
+        SwingUtilities.invokeLater(() -> {
+            if (queuePanel == null) return;
+            queuePanel.removeAll();
+            for (Car c : q) {
+                JLabel lbl = new JLabel("Car " + c.getID());
+                lbl.setOpaque(true);
+                lbl.setBackground(Color.YELLOW);
+                lbl.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+                queuePanel.add(lbl);
+            }
+            queuePanel.revalidate();
+            queuePanel.repaint();
+        });
+    }
 }
 
 class Pump extends Thread {
-    Semaphore Empty,Full,Pump,Mutex;
+    Semaphore Empty, Full, Pump, Mutex;
     Queue<Car> queue;
     int ID;
+
     public Pump(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Semaphore Mutex, Queue<Car> queue) {
-        this.Empty = Empty ;
-        this.Full = Full ;
-        this.Pump = Pump ;
-        this.Mutex = Mutex ;
-        this.queue = queue ;
-        this.ID = ID ;
+        this.Empty = Empty;
+        this.Full = Full;
+        this.Pump = Pump;
+        this.Mutex = Mutex;
+        this.queue = queue;
+        this.ID = ID;
     }
+
     @Override
     public void run() {
-        //while true,,, to keep the pumps active and waiting for any car in the queue
-        while(true) {
-            //wait until there is any cars add to the full semaphore
+        while (true) {
             Full.Wait();
-            //mutual exclusion semaphore to access queue one at a time
             Mutex.Wait();
-            Car c = queue.poll() ;
+            if (queue.isEmpty()) {
+                Mutex.signal();
+                continue;
+            }
+            Car c = queue.poll();
+            GUI.updateQueue(queue);
             Mutex.signal();
-            //signal for any waiting cars that there is an empty slot in the queue
             Empty.signal();
 
-            System.out.println("Pump " + ID + ": Car " + c.getID() + " occupied");
+            if (c == null) break;
 
-            //occupy a pump
+            GUI.log("Pump " + ID + ": Car " + c.getID() + " occupied");
+            GUI.updatePump(ID, "Occupied by Car " + c.getID(), true);
+
             Pump.Wait();
-            System.out.println("Pump " + ID + ": Car " + c.getID() + " login");
-            System.out.println("Pump " + ID + ": Car " + c.getID() + " is recieving service at bay" + ID);
-            try{
-                Thread.sleep(2000);
-            }
-            catch(InterruptedException e){
-                System.out.println("Error: " + e);
-            }
-            System.out.println("Pump " + ID + ": Car " + c.getID() + " finishes service");
+            GUI.log("Pump " + ID + ": Car " + c.getID() + " login");
+            GUI.log("Pump " + ID + ": Car " + c.getID() + " is receiving service at bay " + ID);
+
+            try { Thread.sleep(2000); } catch (InterruptedException e) { }
+
+            GUI.log("Pump " + ID + ": Car " + c.getID() + " finishes service");
             Pump.signal();
-            System.out.println("Pump " + ID + ": Bay " + ID + " is now free");
+            GUI.log("Pump " + ID + ": Bay " + ID + " is now free");
+            GUI.updatePump(ID, "Free", false);
 
-                // stop condition: queue empty
-                synchronized (queue) {
-                    if (queue.isEmpty()) {
-                        break;
-                    }
-
-                }
-
-      }
-
+            synchronized (queue) {
+                if (queue.isEmpty()) break;
+            }
+        }
     }
-    public int getID() { return ID ;}
 }
 
 class Car extends Thread {
-    Semaphore Empty,Full,Pump,Mutex;
+    Semaphore Empty, Full, Pump, Mutex;
     Queue<Car> queue;
     int ID;
+
     public Car(int ID, Semaphore Empty, Semaphore Full, Semaphore Pump, Semaphore Mutex, Queue<Car> queue) {
-        this.Empty = Empty ;
-        this.Full = Full ;
-        this.Pump = Pump ;
-        this.Mutex = Mutex ;
-        this.queue = queue ;
-        this.ID = ID ;
+        this.Empty = Empty;
+        this.Full = Full;
+        this.Pump = Pump;
+        this.Mutex = Mutex;
+        this.queue = queue;
+        this.ID = ID;
     }
-    public int getID() { return ID ;}
+
+    public int getID() { return ID; }
 
     @Override
     public void run() {
-        //Wait for an empty spot in the waiting area
         Empty.Wait();
-        System.out.println("Car " + ID + " arrived at the service station.");
+        GUI.log("Car " + ID + " arrived at the service station.");
 
-        //Add car to the queue
         Mutex.Wait();
         queue.add(this);
-        //if the pumps are full the car will have to wait
-        System.out.println("Car " + ID + " is waiting in the queue. Queue size: " + queue.size());
-
+        GUI.updateQueue(queue);
+        GUI.log("Car " + ID + " is waiting in the queue. Queue size: " + queue.size());
         Mutex.signal();
 
-        //Signal that there is a car or more waiting
         Full.signal();
-
     }
 }
 
@@ -117,14 +193,14 @@ public class ServiceStation {
         System.out.print("Enter number of pumps: ");
         int pumpNumber = scanner.nextInt();
 
-        // alidate input
         if (queueSize < 1 || queueSize > 10) {
             System.out.println("Error: Queue size must be between 1 and 10");
             scanner.close();
             return;
         }
 
-        //initialize queue and semaphores
+        GUI.setup(pumpNumber);
+
         Queue<Car> queue = new LinkedList<>();
         Semaphore empty = new Semaphore(queueSize);
         Semaphore full = new Semaphore(0);
@@ -134,42 +210,36 @@ public class ServiceStation {
         List<Pump> pumps = new ArrayList<>();
         List<Car> cars = new ArrayList<>();
 
-        // create and start pumps
         for (int i = 1; i <= pumpNumber; i++) {
             Pump p = new Pump(i, empty, full, pump, mutex, queue);
             pumps.add(p);
             p.start();
         }
 
-        // create cars
         for (int i = 1; i <= queueSize; i++) {
             Car c = new Car(i, empty, full, pump, mutex, queue);
             cars.add(c);
             c.start();
-
-
         }
 
-        // wait for all cars to be processed
         for (Car car : cars) {
             try {
                 car.join();
+                Thread.sleep(2000);
             } catch (InterruptedException e) {
                 System.out.println("Error waiting for car: " + e);
             }
         }
 
-        // wait for pumps to finish
         for (Pump p : pumps) {
             try {
-                p.join(2000); // wait up to 2 seconds for pump to finish
+                p.join(2000);
             } catch (InterruptedException e) {
                 System.out.println("Error waiting for pump: " + e);
             }
         }
 
-        System.out.println("All cars processed; simulation ends");
+        GUI.log("All cars processed; simulation ends");
         scanner.close();
     }
-
 }
