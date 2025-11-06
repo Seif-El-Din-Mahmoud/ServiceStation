@@ -1,3 +1,4 @@
+//semaphore class for synchronization control
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
@@ -22,6 +23,7 @@ class Semaphore {
     public synchronized int getValue() { return value; }
 }
 
+//gui class for visual display of pumps, queue, and log
 class GUI {
     private static JTextArea logArea;
     private static JLabel[] pumpLabels;
@@ -34,7 +36,7 @@ class GUI {
             frame.setSize(700, 500);
             frame.setLayout(new BorderLayout(8,8));
 
-            // Top: pumps
+            // top: pumps
             JPanel pumpsPanel = new JPanel(new GridLayout(1, pumps, 8, 8));
             pumpLabels = new JLabel[pumps];
             for (int i = 0; i < pumps; i++) {
@@ -45,13 +47,13 @@ class GUI {
                 pumpsPanel.add(pumpLabels[i]);
             }
 
-            // Middle: queue
+            // middle: queue
             queuePanel = new JPanel();
             queuePanel.setBorder(BorderFactory.createTitledBorder("Waiting Queue"));
             queuePanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5));
             queuePanel.setPreferredSize(new Dimension(0, 120));
 
-            // Bottom: log
+            // bottom: log
             logArea = new JTextArea();
             logArea.setEditable(false);
             JScrollPane scroll = new JScrollPane(logArea);
@@ -101,6 +103,7 @@ class GUI {
     }
 }
 
+// pump thread representing a service bay
 class Pump extends Thread {
     Semaphore Empty, Full, Pump, Mutex;
     Queue<Car> queue;
@@ -117,19 +120,15 @@ class Pump extends Thread {
 
     @Override
     public void run() {
-        while (true) {
+        //while true,,, to keep the pumps active and waiting for any car in the queue
+        while(true) {
+            //wait until there is any cars add to the full semaphore
             Full.Wait();
+            //mutual exclusion semaphore to access queue one at a time
             Mutex.Wait();
-            if (queue.isEmpty()) {
-                Mutex.signal();
-                continue;
-            }
-            Car c = queue.poll();
-            GUI.updateQueue(queue);
+            Car c = queue.poll() ;
             Mutex.signal();
-            Empty.signal();
-
-            if (c == null) break;
+            //signal for any waiting
 
             GUI.log("Pump " + ID + ": Car " + c.getID() + " occupied");
             GUI.updatePump(ID, "Occupied by Car " + c.getID(), true);
@@ -145,6 +144,7 @@ class Pump extends Thread {
             GUI.log("Pump " + ID + ": Bay " + ID + " is now free");
             GUI.updatePump(ID, "Free", false);
 
+            // stop condition: queue empty
             synchronized (queue) {
                 if (queue.isEmpty()) break;
             }
@@ -152,6 +152,7 @@ class Pump extends Thread {
     }
 }
 
+// car thread representing a customer car
 class Car extends Thread {
     Semaphore Empty, Full, Pump, Mutex;
     Queue<Car> queue;
@@ -170,19 +171,23 @@ class Car extends Thread {
 
     @Override
     public void run() {
+        //Wait for an empty spot in the waiting area
         Empty.Wait();
         GUI.log("Car " + ID + " arrived at the service station.");
 
         Mutex.Wait();
         queue.add(this);
         GUI.updateQueue(queue);
-        GUI.log("Car " + ID + " is waiting in the queue. Queue size: " + queue.size());
+        if (!queue.isEmpty()) {
+            GUI.log("Car " + ID + " is waiting in the queue. Queue size: " + queue.size());
+        }
         Mutex.signal();
-
+        //signal that there is a car waiting
         Full.signal();
     }
 }
 
+// main class to start simulation
 public class ServiceStation {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -200,6 +205,8 @@ public class ServiceStation {
         }
 
         GUI.setup(pumpNumber);
+        // wait a bit before simulation starts
+        try { Thread.sleep(5000); } catch (InterruptedException e) { }
 
         Queue<Car> queue = new LinkedList<>();
         Semaphore empty = new Semaphore(queueSize);
